@@ -35,21 +35,21 @@ The following behaviour is not acceptable in this project:
 
 Context matters, but "it was a joke" does not automatically make harmful behaviour acceptable.
 
-## Technical disagreement
+## Disagreement and tone
 
-This project is expected to involve strong opinions.
+This project does not require contributors to be endlessly polite, agreeable, or cheerful.
 
-You may say:
+Technical discussions may be blunt, direct, and strongly argued. You may say that code is broken, a design is bad, an argument is unconvincing, or a patch should not be merged.
 
-> This design is unnecessarily complicated and I don't think we should merge it.
+What is not acceptable is turning technical disagreement into personal abuse.
 
-You may not say:
+Do not insult, demean, threaten, harass, or use slurs against other contributors. Do not attack someone based on their identity or personal characteristics. Do not deliberately try to humiliate people.
 
-> Anyone stupid enough to design this shouldn't be contributing here.
+Criticize the work as hard as necessary. Treat the person doing the work with basic human decency.
 
-Arguments should ultimately come back to evidence, requirements, maintainability, performance, standards compliance, security, or other aspects of the work.
+You are not your work. Having a bad idea is okay. Treating other people poorly isn't.
 
-Nobody is required to agree with everybody else. Everybody is required to behave like the other people in the discussion are human beings.
+Seniority, project ownership, technical expertise, or the quality of someone's contributions do not excuse abusive behaviour.
 
 ## Scope
 
