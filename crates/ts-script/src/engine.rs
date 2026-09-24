@@ -96,8 +96,6 @@ impl Drop for ScriptEngine
 {
     fn drop(&mut self)
     {
-        let _ = self.child_process.shutdown();
-
-        println!("Script engine has been shut down.");
+        let _ = self.child_process.shutdown(None, None);
     }
 }

@@ -5,7 +5,8 @@ use std::{ collections::VecDeque,
            os::fd::{ AsFd, AsRawFd },
            process::{ Child, Command, Stdio },
            sync::{ atomic::{ AtomicI64, Ordering }, Mutex },
-           time::{ Duration, Instant } };
+           time::{ Duration, Instant },
+           thread::sleep };
 
 use crate::ipc::{ IpcMessage, IpcError, IpcPacket };
 
@@ -182,16 +183,19 @@ impl IsolatedProcess
      * From parent to child, this will request the child to shut down.
      * From child to parent it is a notification that the child intends to shut down.
      */
-    pub fn shutdown(&mut self) -> ProcessResult<()>
+    pub fn shutdown(&mut self,
+                    message_timeout: Option<Duration>,
+                    wait_timeout: Option<Duration>) -> ProcessResult<()>
     {
         // Implementation for killing the isolated process would go here.
-        if self.is_alive(None)?
+        if self.is_alive(message_timeout)?
         {
             let _ = self.send(&IpcMessage::Shutdown)?;
         }
 
         // Wait a short duration to allow the other process to handle the shutdown message.
-        std::thread::sleep(std::time::Duration::from_millis(500));
+        let timeout = wait_timeout.unwrap_or(Duration::from_millis(500));
+        sleep(timeout);
 
         // Check if the process is still alive after the shutdown message.
         let result = self.is_alive(None);
