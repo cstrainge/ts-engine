@@ -1,0 +1,13 @@
+
+[package]
+name = "ts-script"
+description = "Implementation of TypeScript and JavaScript scripting languages."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[features]
+
+[dependencies]

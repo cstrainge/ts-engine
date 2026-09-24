@@ -1,0 +1,14 @@
+
+[package]
+name = "ts-engine"
+description = "Rust based Java and TypeScript native engine."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[features]
+
+[dependencies]
+ts-process = { path = "../ts-process" }
