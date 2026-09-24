@@ -14,6 +14,7 @@ fn run_as_child()
 {
     // Construct a link to the parent process.
     let mut parent = IsolatedProcess::new_from_child().unwrap();
+    let mut capabilities_applied = false;
 
     loop
     {
@@ -35,14 +36,28 @@ fn run_as_child()
             // Apply the capability set as sent by the parent process.
             IpcMessage::ApplyCapabilities { capabilities } =>
                 {
+                    if capabilities_applied
+                    {
+                        eprintln!("Capabilities have already been applied, aborting.");
+                        break;
+                    }
+
+                    capabilities_applied = true;
                     apply_capabilities(&capabilities);
                     parent.respond(id, &IpcMessage::CapabilitiesApplied).unwrap();
+
                 },
 
             // We're being told we're supposed to initialize as a script host. Do so now. When this
             // returns, it's because we've been told to shutdown.
             IpcMessage::InitAsScriptHost { compile_mode, script_language } =>
                 {
+                    if !capabilities_applied
+                    {
+                        eprintln!("Capabilities have not been applied, aborting.");
+                        break;
+                    }
+
                     ScriptHost::execute_as_host(&mut parent,
                                                 id,
                                                 compile_mode,
