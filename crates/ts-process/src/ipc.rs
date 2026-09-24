@@ -1,6 +1,7 @@
 
 use std::{ fmt::{ self, Display, Formatter }, random::random };
 
+use crate::capabilities::Capabilities;
 
 
 #[repr(u8)]
@@ -67,6 +68,9 @@ impl TryFrom<u8> for ScriptLanguage
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IpcMessage
 {
+    ApplyCapabilities { capabilities: Capabilities },
+    CapabilitiesApplied,
+
     InitAsScriptHost { compile_mode: CompileMode, script_language: ScriptLanguage },
     ScriptHostReady,
 
@@ -114,11 +118,13 @@ impl IpcMessage
     {
         match self
         {
-            IpcMessage::InitAsScriptHost { .. } => 0,
-            IpcMessage::ScriptHostReady => 1,
-            IpcMessage::Shutdown => 2,
-            IpcMessage::Ping { .. } => 3,
-            IpcMessage::Pong { .. } => 4
+            IpcMessage::ApplyCapabilities { .. } => 0,
+            IpcMessage::CapabilitiesApplied => 1,
+            IpcMessage::InitAsScriptHost { .. } => 2,
+            IpcMessage::ScriptHostReady => 3,
+            IpcMessage::Shutdown => 4,
+            IpcMessage::Ping { .. } => 5,
+            IpcMessage::Pong { .. } => 6
         }
     }
 
@@ -126,6 +132,18 @@ impl IpcMessage
     {
         match self
         {
+            IpcMessage::ApplyCapabilities { capabilities } =>
+                {
+                    let mut data = vec![0; 17];
+
+                    data[0] = self.id();
+                    let capabilities_data = capabilities.to_wire();
+                    data[1..17].copy_from_slice(&capabilities_data);
+                    data
+                },
+
+            IpcMessage::CapabilitiesApplied => vec![self.id()],
+
             IpcMessage::InitAsScriptHost { compile_mode, script_language } =>
                 {
                     let mut data = vec![0; 3];
@@ -180,6 +198,19 @@ impl IpcMessage
         {
             0 =>
                 {
+                    expect_length("ApplyCapabilities", data, 17)?;
+                    let capabilities = Capabilities::from_wire(&data[1..])?;
+                    Ok(IpcMessage::ApplyCapabilities { capabilities })
+                },
+
+            1 =>
+                {
+                    expect_length("CapabilitiesApplied", data, 1)?;
+                    Ok(IpcMessage::CapabilitiesApplied)
+                },
+
+            2 =>
+                {
                     expect_length("Init", data, 3)?;
                     Ok(IpcMessage::InitAsScriptHost
                         {
@@ -188,19 +219,19 @@ impl IpcMessage
                         })
                 },
 
-            1 =>
+            3 =>
                 {
                     expect_length("ScriptHostReady", data, 1)?;
                     Ok(IpcMessage::ScriptHostReady)
                 },
 
-            2 =>
+            4 =>
                 {
                     expect_length("Shutdown", data, 1)?;
                     Ok(IpcMessage::Shutdown)
                 },
 
-            3 =>
+            5 =>
                 {
                     expect_length("Ping", data, 5)?;
 
@@ -208,7 +239,7 @@ impl IpcMessage
                     Ok(IpcMessage::Ping { nonce })
                 }
 
-            4 =>
+            6 =>
                 {
                     expect_length("Pong", data, 5)?;
 

@@ -1,5 +1,6 @@
 
-use ts_process::{ execute::{ IsolatedProcess, ProcessError },
+use ts_process::{ capabilities::Capabilities,
+                  execute::{ IsolatedProcess, ProcessError },
                   ipc::IpcMessage };
 
 
@@ -19,6 +20,7 @@ pub struct ScriptEngine
 pub enum ScriptEngineError
 {
     ProcessError { error: ProcessError },
+    CapabilitiesApplyFailed,
     EngineFailedStart,
     EngineNotAlive
 }
@@ -37,8 +39,24 @@ impl ScriptEngine
 {
     pub fn new(compile_mode: CompileMode, script_language: ScriptLanguage) -> Result<Self, ScriptEngineError>
     {
+        // Create the child process that will be the script engine itself.
         let mut child_process = IsolatedProcess::new()?;
 
+        // Apply default capabilities to the child process.
+        let capabilities = Capabilities::default();
+
+        let result = child_process.send_and_receive(&IpcMessage::ApplyCapabilities
+                {
+                    capabilities
+                },
+                None)?;
+
+        if result != IpcMessage::CapabilitiesApplied
+        {
+            return Err(ScriptEngineError::CapabilitiesApplyFailed);
+        }
+
+        // Now tell the child process it is being initialized as a script host.
         let result = child_process.send_and_receive(&IpcMessage::InitAsScriptHost
             {
                 compile_mode,
@@ -51,6 +69,7 @@ impl ScriptEngine
             return Err(ScriptEngineError::EngineFailedStart);
         }
 
+        // At this point, the script engine has been successfully initialized and is ready to use.
         Ok(Self
         {
             child_process

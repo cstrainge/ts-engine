@@ -2,7 +2,7 @@
 use std::thread::sleep;
 
 use ts_script::{ engine::{ CompileMode, ScriptEngine, ScriptLanguage }, host::ScriptHost };
-use ts_process::{ ipc::IpcMessage, execute::IsolatedProcess };
+use ts_process::{ capabilities::apply_capabilities, ipc::IpcMessage, execute::IsolatedProcess };
 
 
 
@@ -32,6 +32,13 @@ fn run_as_child()
 
         match message
         {
+            // Apply the capability set as sent by the parent process.
+            IpcMessage::ApplyCapabilities { capabilities } =>
+                {
+                    apply_capabilities(&capabilities);
+                    parent.respond(id, &IpcMessage::CapabilitiesApplied).unwrap();
+                },
+
             // We're being told we're supposed to initialize as a script host. Do so now. When this
             // returns, it's because we've been told to shutdown.
             IpcMessage::InitAsScriptHost { compile_mode, script_language } =>
