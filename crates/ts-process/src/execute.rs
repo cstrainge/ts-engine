@@ -1,6 +1,8 @@
 
 use std::{ collections::VecDeque,
+           fs::File,
            io::{ self, Read, Write },
+           os::fd::{ AsFd, AsRawFd },
            process::{ Child, Command, Stdio },
            sync::{ atomic::{ AtomicI64, Ordering }, Mutex },
            time::{ Duration, Instant } };
@@ -11,7 +13,7 @@ use crate::ipc::{ IpcMessage, IpcError, IpcPacket };
 
 const MAX_IPC_PACKET_SIZE: usize = 64 * 1024 * 1024;
 
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
 
 #[derive(Debug)]
@@ -21,7 +23,8 @@ pub enum ProcessError
     ProcessDead,
     IpcError { error: IpcError },
     IoError { error: io::Error },
-    ConnectionTimeout
+    ConnectionTimeout,
+    UnexpectedResponse
 }
 
 
@@ -46,13 +49,36 @@ impl From<io::Error> for ProcessError
 pub type ProcessResult<T> = Result<T, ProcessError>;
 
 
+trait IpcReader: Read + Send + AsRawFd
+{
+}
+
+
+impl<T> IpcReader for T
+    where T: Read + Send + AsRawFd
+{
+}
+
+
+trait IpcWriter: Write + Send + AsRawFd
+{
+}
+
+
+impl<T> IpcWriter for T
+    where T: Write + Send + AsRawFd
+{
+}
+
+
+
 pub struct IsolatedProcess
 {
     is_parent: bool,
     next_message_id: AtomicI64,
     message_queue: VecDeque<IpcPacket>,
-    reader: Mutex<Box<dyn Read + Send>>,
-    writer: Mutex<Box<dyn Write + Send>>,
+    reader: Mutex<Box<dyn IpcReader>>,
+    writer: Mutex<Box<dyn IpcWriter>>,
     child: Option<Child>
 }
 
@@ -80,6 +106,9 @@ impl IsolatedProcess
                     ProcessError::StartFailed { message: error.to_string() }
                 })?;
 
+//        let stdin = io::stdin();
+//        let stdout = io::stdout();
+
         let writer = child.stdin
                           .take()
                           .ok_or_else(||
@@ -89,6 +118,9 @@ impl IsolatedProcess
                           .take()
                           .ok_or_else(||
             ProcessError::StartFailed { message: "Failed to take child stdout".to_string() })?;
+
+//        let reader = File::from(stdin.as_fd().try_clone_to_owned()?);
+//        let writer = File::from(stdout.as_fd().try_clone_to_owned()?);
 
         Ok(IsolatedProcess
             {
@@ -106,13 +138,19 @@ impl IsolatedProcess
      */
     pub fn new_from_child() -> ProcessResult<Self>
     {
+        let stdin = io::stdin();
+        let stdout = io::stdout();
+
+        let reader = File::from(stdin.as_fd().try_clone_to_owned()?);
+        let writer = File::from(stdout.as_fd().try_clone_to_owned()?);
+
         Ok(IsolatedProcess
             {
                 is_parent: false,
                 next_message_id: AtomicI64::new(-1),
                 message_queue: VecDeque::new(),
-                reader: Mutex::new(Box::new(std::io::stdin())),
-                writer: Mutex::new(Box::new(std::io::stdout())),
+                reader: Mutex::new(Box::new(reader)),
+                writer: Mutex::new(Box::new(writer)),
                 child: None
             })
     }
@@ -130,9 +168,17 @@ impl IsolatedProcess
             }
         }
 
-        // Send a ping message to the isolated process and check for a pong response.
-        let response = self.send_and_receive(&IpcMessage::Ping { value: 1024 }, timeout)?;
-        Ok(matches!(response, IpcMessage::Pong { value: 1024 }))
+        // Create a new unique ping message with a random nonce.
+        let (ping, nonce) = IpcMessage::new_ping();
+
+        // Send the ping message to the isolated process and check for a pong response.
+        let response = self.send_and_receive(&ping, timeout)?;
+
+        match response
+        {
+            IpcMessage::Pong { nonce: response_nonce } if response_nonce == nonce => Ok(true),
+            _ => Err(ProcessError::UnexpectedResponse)
+        }
     }
 
     /**
@@ -233,7 +279,15 @@ impl IsolatedProcess
             }
 
             // The message wasn't in the queue so try to pull it directly from the other process.
-            let (receive_id, response) = self.receive_new(timeout)?;
+            let now = Instant::now();
+
+            if now >= deadline
+            {
+                return Err(ProcessError::ConnectionTimeout);
+            }
+
+            let remaining_time = deadline - now;
+            let (receive_id, response) = self.receive_new(Some(remaining_time))?;
 
             // Make sure the message received is the one we are waiting for. If not, queue it for
             // later.
@@ -244,12 +298,6 @@ impl IsolatedProcess
             else
             {
                 return Ok(response);
-            }
-
-            // Check for timeout.
-            if Instant::now() > deadline
-            {
-                return Err(ProcessError::IpcError { error: IpcError::Timeout });
             }
         }
     }
@@ -282,12 +330,13 @@ impl IsolatedProcess
      */
     fn receive_new(&self, timeout: Option<Duration>) -> ProcessResult<(i64, IpcMessage)>
     {
-        let _timeout = timeout.unwrap_or(DEFAULT_TIMEOUT);
+        let timeout = timeout.unwrap_or(DEFAULT_TIMEOUT);
+        let deadline = Instant::now() + timeout;
 
         let mut reader = self.reader.lock().expect("Failed to lock reader");
         let mut size_bytes = [0u8; size_of::<usize>()];
 
-        reader.read_exact(&mut size_bytes)?;
+        Self::read_exact_until(&mut **reader, &mut size_bytes, deadline)?;
 
         let packet_size = usize::from_le_bytes(size_bytes);
 
@@ -306,11 +355,72 @@ impl IsolatedProcess
 
         let mut packet_bytes = vec![0u8; packet_size];
 
-        reader.read_exact(&mut packet_bytes)?;
+        Self::read_exact_until(&mut **reader, &mut packet_bytes, deadline)?;
 
         let packet = IpcPacket::from_wire(&packet_bytes)?;
 
         Ok((packet.id, packet.message))
+    }
+
+    /**
+     * Read exactly the number of bytes required into the buffer, waiting until the deadline.
+     */
+    fn read_exact_until(reader: &mut dyn IpcReader,
+                        buffer: &mut [u8],
+                        deadline: Instant) -> ProcessResult<()>
+    {
+        let mut offset = 0;
+
+        while offset < buffer.len()
+        {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+
+            if remaining.is_zero()
+            {
+                return Err(ProcessError::ConnectionTimeout);
+            }
+
+            let mut fd = libc::pollfd
+                {
+                    fd: reader.as_raw_fd(),
+                    events: libc::POLLIN,
+                    revents: 0
+                };
+
+            let timeout = remaining.as_millis()
+                                   .clamp(1, i32::MAX as u128) as i32;
+
+            let result = unsafe { libc::poll(&mut fd, 1, timeout) };
+
+            match result
+            {
+                0 => return Err(ProcessError::ConnectionTimeout),
+
+                result if result < 0 =>
+                    {
+                        let error = io::Error::last_os_error();
+
+                        if error.kind() == io::ErrorKind::Interrupted
+                        {
+                            continue;
+                        }
+
+                        return Err(error.into());
+                    },
+
+                _ => {}
+            }
+
+            match reader.read(&mut buffer[offset..])
+            {
+                Ok(0) => return Err(ProcessError::ProcessDead),
+                Ok(size) => offset += size,
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+                Err(error) => return Err(error.into())
+            }
+        }
+
+        Ok(())
     }
 
     /**

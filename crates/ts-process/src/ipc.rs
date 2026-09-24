@@ -1,23 +1,95 @@
 
-use std::fmt::{ self, Display, Formatter };
+use std::{ fmt::{ self, Display, Formatter }, random::random };
+
+
+
+#[repr(u8)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum CompileMode
+{
+    Debug,
+    Release
+}
+
+
+impl TryFrom<u8> for CompileMode
+{
+    type Error = IpcError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error>
+    {
+        match value
+        {
+            0 => Ok(CompileMode::Debug),
+            1 => Ok(CompileMode::Release),
+
+            _ => Err(IpcError::DecodeError
+                {
+                    message: format!("Unknown compile mode: {}.", value)
+                })
+        }
+    }
+}
+
+
+
+#[repr(u8)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum ScriptLanguage
+{
+    JavaScript,
+    TypeScript
+}
+
+
+
+impl TryFrom<u8> for ScriptLanguage
+{
+    type Error = IpcError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error>
+    {
+        match value
+        {
+            0 => Ok(ScriptLanguage::JavaScript),
+            1 => Ok(ScriptLanguage::TypeScript),
+
+            _ => Err(IpcError::DecodeError
+                {
+                    message: format!("Unknown script language: {}.", value)
+                })
+        }
+    }
+}
 
 
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IpcMessage
 {
-    Init,
+    InitAsScriptHost { compile_mode: CompileMode, script_language: ScriptLanguage },
     Shutdown,
-    Ping { value: u32 },
-    Pong { value: u32 }
+    Ping { nonce: u32 },
+    Pong { nonce: u32 }
+}
+
+
+impl IpcMessage
+{
+    pub fn new_ping() -> (IpcMessage, u32)
+    {
+        // Generate a random nonce for the ping message.
+        let nonce = random::<u32>(..);
+
+        (IpcMessage::Ping { nonce }, nonce)
+    }
 }
 
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IpcError
 {
-    DecodeError{ message: String },
-    Timeout
+    DecodeError{ message: String }
 }
 
 
@@ -27,8 +99,7 @@ impl Display for IpcError
     {
         match self
         {
-            IpcError::DecodeError{ message } => write!(f, "IPC decode error: {}", message),
-            IpcError::Timeout => write!(f, "IPC timeout error.")
+            IpcError::DecodeError{ message } => write!(f, "IPC decode error: {}", message)
         }
     }
 }
@@ -40,7 +111,7 @@ impl IpcMessage
     {
         match self
         {
-            IpcMessage::Init => 0,
+            IpcMessage::InitAsScriptHost { .. } => 0,
             IpcMessage::Shutdown => 1,
             IpcMessage::Ping { .. } => 2,
             IpcMessage::Pong { .. } => 3,
@@ -51,18 +122,27 @@ impl IpcMessage
     {
         match self
         {
-            IpcMessage::Init => vec![self.id()],
+            IpcMessage::InitAsScriptHost { compile_mode, script_language } =>
+                {
+                    let mut data = vec![0; 3];
+
+                    data[0] = self.id();
+                    data[1] = *compile_mode as u8;
+                    data[2] = *script_language as u8;
+
+                    data
+                },
 
             IpcMessage::Shutdown => vec![self.id()],
 
-              IpcMessage::Ping { value }
-            | IpcMessage::Pong { value } =>
+              IpcMessage::Ping { nonce }
+            | IpcMessage::Pong { nonce } =>
                 {
                     let mut data = vec![0; 5];
-                    let value_bytes = value.to_le_bytes();
+                    let nonce_bytes = nonce.to_le_bytes();
 
                     data[0] = self.id();
-                    data[1..5].copy_from_slice(&value_bytes);
+                    data[1..5].copy_from_slice(&nonce_bytes);
                     data
                 }
         }
@@ -94,8 +174,12 @@ impl IpcMessage
         {
             0 =>
                 {
-                    expect_length("Init", data, 1)?;
-                    Ok(IpcMessage::Init)
+                    expect_length("Init", data, 3)?;
+                    Ok(IpcMessage::InitAsScriptHost
+                        {
+                            compile_mode: CompileMode::try_from(data[1])?,
+                            script_language: ScriptLanguage::try_from(data[2])?
+                        })
                 },
 
             1 =>
@@ -108,16 +192,16 @@ impl IpcMessage
                 {
                     expect_length("Ping", data, 5)?;
 
-                    let value = u32::from_le_bytes(data[1..5].try_into().unwrap());
-                    Ok(IpcMessage::Ping { value })
+                    let nonce = u32::from_le_bytes(data[1..5].try_into().unwrap());
+                    Ok(IpcMessage::Ping { nonce })
                 }
 
             3 =>
                 {
                     expect_length("Pong", data, 5)?;
 
-                    let value = u32::from_le_bytes(data[1..5].try_into().unwrap());
-                    Ok(IpcMessage::Pong { value })
+                    let nonce = u32::from_le_bytes(data[1..5].try_into().unwrap());
+                    Ok(IpcMessage::Pong { nonce })
                 }
 
             _ =>
@@ -172,12 +256,12 @@ impl IpcPacket
         Ok(IpcPacket { id, message })
     }
 
-    pub fn parent_message(&self) -> bool
+    pub fn sent_from_parent(&self) -> bool
     {
         self.id > 0
     }
 
-    pub fn child_message(&self) -> bool
+    pub fn sent_from_child(&self) -> bool
     {
         self.id < 0
     }

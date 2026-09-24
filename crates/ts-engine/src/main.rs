@@ -8,7 +8,7 @@ use ts_process::{ ipc::IpcMessage, execute::IsolatedProcess };
 fn run_as_parent()
 {
     let mut child = IsolatedProcess::new().unwrap();
-    let message = child.send_and_receive(&IpcMessage::Ping { value: 1024 }, None).unwrap();
+    let message = child.send_and_receive(&IpcMessage::Ping { nonce: 1024 }, None).unwrap();
 
     println!("Received message from child: {:?}", message);
 
@@ -37,9 +37,9 @@ fn run_as_child()
 
         match message
         {
-            IpcMessage::Ping { value } =>
+            IpcMessage::Ping { nonce } =>
                 {
-                    parent.respond(id, &IpcMessage::Pong { value }).unwrap();
+                    parent.respond(id, &IpcMessage::Pong { nonce }).unwrap();
                 },
 
             IpcMessage::Shutdown =>

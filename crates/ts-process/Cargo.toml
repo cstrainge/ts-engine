@@ -11,3 +11,4 @@ repository.workspace = true
 [features]
 
 [dependencies]
+libc = "0.2"
