@@ -106,9 +106,6 @@ impl IsolatedProcess
                     ProcessError::StartFailed { message: error.to_string() }
                 })?;
 
-//        let stdin = io::stdin();
-//        let stdout = io::stdout();
-
         let writer = child.stdin
                           .take()
                           .ok_or_else(||
@@ -118,9 +115,6 @@ impl IsolatedProcess
                           .take()
                           .ok_or_else(||
             ProcessError::StartFailed { message: "Failed to take child stdout".to_string() })?;
-
-//        let reader = File::from(stdin.as_fd().try_clone_to_owned()?);
-//        let writer = File::from(stdout.as_fd().try_clone_to_owned()?);
 
         Ok(IsolatedProcess
             {
