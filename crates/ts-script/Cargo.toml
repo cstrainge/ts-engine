@@ -11,3 +11,4 @@ repository.workspace = true
 [features]
 
 [dependencies]
+ts-process = { path = "../ts-process" }

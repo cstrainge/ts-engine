@@ -13,6 +13,7 @@ name = "ts-engine"
 version = "0.0.0"
 dependencies = [
  "ts-process",
+ "ts-script",
 ]
 
 [[package]]
@@ -25,3 +26,6 @@ dependencies = [
 [[package]]
 name = "ts-script"
 version = "0.0.0"
+dependencies = [
+ "ts-process",
+]

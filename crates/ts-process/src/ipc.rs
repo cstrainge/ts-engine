@@ -68,7 +68,10 @@ impl TryFrom<u8> for ScriptLanguage
 pub enum IpcMessage
 {
     InitAsScriptHost { compile_mode: CompileMode, script_language: ScriptLanguage },
+    ScriptHostReady,
+
     Shutdown,
+
     Ping { nonce: u32 },
     Pong { nonce: u32 }
 }
@@ -112,9 +115,10 @@ impl IpcMessage
         match self
         {
             IpcMessage::InitAsScriptHost { .. } => 0,
-            IpcMessage::Shutdown => 1,
-            IpcMessage::Ping { .. } => 2,
-            IpcMessage::Pong { .. } => 3,
+            IpcMessage::ScriptHostReady => 1,
+            IpcMessage::Shutdown => 2,
+            IpcMessage::Ping { .. } => 3,
+            IpcMessage::Pong { .. } => 4
         }
     }
 
@@ -132,6 +136,8 @@ impl IpcMessage
 
                     data
                 },
+
+            IpcMessage::ScriptHostReady => vec![self.id()],
 
             IpcMessage::Shutdown => vec![self.id()],
 
@@ -184,11 +190,17 @@ impl IpcMessage
 
             1 =>
                 {
+                    expect_length("ScriptHostReady", data, 1)?;
+                    Ok(IpcMessage::ScriptHostReady)
+                },
+
+            2 =>
+                {
                     expect_length("Shutdown", data, 1)?;
                     Ok(IpcMessage::Shutdown)
                 },
 
-            2 =>
+            3 =>
                 {
                     expect_length("Ping", data, 5)?;
 
@@ -196,7 +208,7 @@ impl IpcMessage
                     Ok(IpcMessage::Ping { nonce })
                 }
 
-            3 =>
+            4 =>
                 {
                     expect_length("Pong", data, 5)?;
 

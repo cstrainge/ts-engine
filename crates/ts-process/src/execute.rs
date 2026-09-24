@@ -182,14 +182,30 @@ impl IsolatedProcess
      * From parent to child, this will request the child to shut down.
      * From child to parent it is a notification that the child intends to shut down.
      */
-    pub fn shutdown(&self) -> ProcessResult<()>
+    pub fn shutdown(&mut self) -> ProcessResult<()>
     {
         // Implementation for killing the isolated process would go here.
+        if self.is_alive(None)?
+        {
+            let _ = self.send(&IpcMessage::Shutdown)?;
+        }
 
-        // Send shutdown message to the other process.
-        // If the shutdown message fails to be delivered, we may need to forcefully terminate the
-        // process.
-        // Or self if we're the child process.
+        // Wait a short duration to allow the other process to handle the shutdown message.
+        std::thread::sleep(std::time::Duration::from_millis(500));
+
+        // Check if the process is still alive after the shutdown message.
+        let result = self.is_alive(None);
+
+        if let Ok(true) = result
+        {
+            // The process is still alive after the shutdown message. Send a sigkill to forcefully
+            // terminate it.
+            if let Some(child) = self.child.as_mut()
+            {
+                let _ = child.kill();
+            }
+        }
+
         Ok(())
     }
 
