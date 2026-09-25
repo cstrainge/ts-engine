@@ -93,7 +93,7 @@ fn run_as_child()
  */
 fn run_as_parent()
 {
-    let engine = ScriptEngine::new(CompileMode::Debug, ScriptLanguage::TypeScript).unwrap();
+    let engine = ScriptEngine::new(CompileMode::Debug, ScriptLanguage::TYPESCRIPT).unwrap();
 
     repl(engine);
 }
