@@ -34,35 +34,21 @@ impl TryFrom<u8> for CompileMode
 
 
 
-#[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum ScriptLanguage
+pub struct ScriptLanguage
 {
-    JavaScript,
-    TypeScript
+    pub types: bool,
+    pub jsx: bool
 }
 
 
-
-impl TryFrom<u8> for ScriptLanguage
+impl ScriptLanguage
 {
-    type Error = IpcError;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error>
-    {
-        match value
-        {
-            0 => Ok(ScriptLanguage::JavaScript),
-            1 => Ok(ScriptLanguage::TypeScript),
-
-            _ => Err(IpcError::DecodeError
-                {
-                    message: format!("Unknown script language: {}.", value)
-                })
-        }
-    }
+    pub const JAVASCRIPT: ScriptLanguage = ScriptLanguage { types: false, jsx: false };
+    pub const TYPESCRIPT: ScriptLanguage = ScriptLanguage { types: true, jsx: false };
+    pub const JSX:        ScriptLanguage = ScriptLanguage { types: false, jsx: true };
+    pub const TSX:        ScriptLanguage = ScriptLanguage { types: true, jsx: true };
 }
-
 
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -112,6 +98,23 @@ impl Display for IpcError
 }
 
 
+pub(crate) fn decode_bool(byte: u8) ->  Result<bool, IpcError>
+{
+    match byte
+    {
+        0 => Ok(false),
+        1 => Ok(true),
+
+        value =>
+            {
+                let message = format!("Invalid boolean value: {}.", value);
+                Err(IpcError::DecodeError { message })
+            }
+    }
+}
+
+
+
 impl IpcMessage
 {
     fn id(&self) -> u8
@@ -146,11 +149,12 @@ impl IpcMessage
 
             IpcMessage::InitAsScriptHost { compile_mode, script_language } =>
                 {
-                    let mut data = vec![0; 3];
+                    let mut data = vec![0; 4];
 
                     data[0] = self.id();
                     data[1] = *compile_mode as u8;
-                    data[2] = *script_language as u8;
+                    data[2] = script_language.types as u8;
+                    data[3] = script_language.jsx as u8;
 
                     data
                 },
@@ -211,11 +215,15 @@ impl IpcMessage
 
             2 =>
                 {
-                    expect_length("Init", data, 3)?;
+                    expect_length("Init", data, 4)?;
                     Ok(IpcMessage::InitAsScriptHost
                         {
                             compile_mode: CompileMode::try_from(data[1])?,
-                            script_language: ScriptLanguage::try_from(data[2])?
+                            script_language: ScriptLanguage
+                                {
+                                    types: decode_bool(data[2])?,
+                                    jsx: decode_bool(data[3])?
+                                }
                         })
                 },
 

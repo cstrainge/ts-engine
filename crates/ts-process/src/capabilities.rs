@@ -1,7 +1,7 @@
 
 use std::fmt::{ self, Debug, Display, Formatter };
 
-use crate::ipc::IpcError;
+use crate::ipc::{ decode_bool, IpcError };
 
 
 
@@ -292,21 +292,6 @@ impl Capabilities
 
     pub fn from_wire(data: &[u8]) -> Result<Capabilities, IpcError>
     {
-        fn decode_bool(byte: u8) ->  Result<bool, IpcError>
-        {
-            match byte
-            {
-                0 => Ok(false),
-                1 => Ok(true),
-
-                value =>
-                    {
-                        let message = format!("Invalid boolean value: {}.", value);
-                        Err(IpcError::DecodeError { message })
-                    }
-            }
-        }
-
         if data.len() != 16
         {
             let message = format!("Bad data length, expected 16 bytes, got {}", data.len());
