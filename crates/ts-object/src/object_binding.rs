@@ -12,7 +12,7 @@ use crate::{ property_key::PropertyKey,
 
 pub struct ObjectBinding<T>
 {
-    _value: RwLock<T>
+    value: RwLock<T>
 }
 
 
@@ -21,13 +21,24 @@ impl<T> ObjectTrait for ObjectBinding<T>
     where
         T: ObjectType + Send + Sync
 {
-    async fn get(&self, _key: &PropertyKey, _receiver: Value) -> RuntimeResult<Value>
+    async fn get(&self, key: &PropertyKey, _receiver: Value) -> RuntimeResult<Value>
     {
-        Ok(Value::Undefined)
+        let value =
+            {
+                let object = self.value.read().unwrap();
+                object.get_property(key)?
+            };
+
+        Ok(value.unwrap_or(Value::Undefined))
     }
 
-    async fn set(&self, _key: &PropertyKey, _receiver: Value, _value: Value) -> RuntimeResult<()>
+    async fn set(&self, key: &PropertyKey, _receiver: Value, value: Value) -> RuntimeResult<()>
     {
+        {
+            let mut object = self.value.write().unwrap();
+            object.set_property(key, value)?;
+        }
+
         Ok(())
     }
 
@@ -46,3 +57,19 @@ impl<T> ObjectTrait for ObjectBinding<T>
         Ok(None)
     }
 }
+
+
+//impl<T> ArrayTrait for ObjectBinding<T>
+//    where
+//        T: ObjectType + Send + Sync
+//{
+//    //
+//}
+
+
+//impl<T> HashTrait for ObjectBinding<T>
+//    where
+//        T: ObjectType + Send + Sync
+//{
+//    //
+//}

@@ -1,13 +1,11 @@
 
-use async_trait::async_trait;
-
 use ts_object_macros::Object;
 
-use crate::object::{ ObjectTrait };
+use crate::object_type::{ ObjectType };
 
 
-#[async_trait]
-pub trait ArrayTrait: ObjectTrait
+
+pub trait ArrayTrait: ObjectType
 {
     //
 }
@@ -20,7 +18,6 @@ pub struct ArrayObject
 }
 
 
-#[async_trait]
 impl ArrayTrait for ArrayObject
 {
     //

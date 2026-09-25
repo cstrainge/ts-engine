@@ -1,14 +1,11 @@
 
-use async_trait::async_trait;
-
 use ts_object_macros::Object;
 
-use crate::object::ObjectTrait;
+use crate::object_type::{ ObjectType };
 
 
 
-#[async_trait]
-pub trait HashTableTrait: ObjectTrait
+pub trait HashTableTrait: ObjectType
 {
     //
 }
@@ -20,7 +17,6 @@ pub struct HashTableObject
 }
 
 
-#[async_trait]
 impl HashTableTrait for HashTableObject
 {
     //
