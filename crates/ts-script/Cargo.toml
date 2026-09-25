@@ -12,3 +12,4 @@ repository.workspace = true
 
 [dependencies]
 ts-process = { path = "../ts-process" }
+ts-object = { path = "../ts-object" }

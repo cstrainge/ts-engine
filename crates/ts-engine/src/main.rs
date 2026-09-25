@@ -1,8 +1,11 @@
 
-use std::thread::sleep;
-
 use ts_script::{ engine::{ CompileMode, ScriptEngine, ScriptLanguage }, host::ScriptHost };
 use ts_process::{ capabilities::apply_capabilities, ipc::IpcMessage, execute::IsolatedProcess };
+
+
+mod repl;
+
+use repl::repl;
 
 
 
@@ -90,20 +93,14 @@ fn run_as_child()
  */
 fn run_as_parent()
 {
-    let mut engine = ScriptEngine::new(CompileMode::Debug, ScriptLanguage::TypeScript).unwrap();
+    let engine = ScriptEngine::new(CompileMode::Debug, ScriptLanguage::TypeScript).unwrap();
 
-    println!("Script engine initialized successfully.");
-
-    sleep(std::time::Duration::from_millis(100));
-
-    engine.keep_alive().unwrap();
-
-    println!("Script engine is alive.");
+    repl(engine);
 }
 
 
 /**
- * Start up and determine whether to run as a child or parent process.
+ * Start up and determine whether to run as a child or the parent process.
  */
 fn main()
 {

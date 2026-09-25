@@ -1,0 +1,19 @@
+
+[package]
+name = "ts-object-macros"
+description = "Implementation object helper macros."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[features]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "3.0.6", features = ["full"] }

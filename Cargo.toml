@@ -4,6 +4,8 @@ resolver = "3"
 
 members = [
         "crates/ts-engine",
+        "crates/ts-object-macros",
+        "crates/ts-object",
         "crates/ts-script",
         "crates/ts-process"
     ]
